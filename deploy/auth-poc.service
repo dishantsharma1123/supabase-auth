@@ -1,0 +1,16 @@
+[Unit]
+Description=Auth POC FastAPI Application
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+User=ds95097v
+Group=ds95097v
+WorkingDirectory=/home/ds95097v/auth-poc/backend
+Environment="PATH=/home/ds95097v/auth-poc/backend/venv/bin"
+ExecStart=/home/ds95097v/auth-poc/backend/venv/bin/gunicorn main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8756
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
