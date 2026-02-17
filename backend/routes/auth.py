@@ -21,6 +21,7 @@ from schemas import (
 )
 from snowflake import generate_snowflake_id, generate_csrf_token
 from config import SSO_TOKEN_EXPIRY
+from email_service import email_service, generate_reset_token, EmailConfig
 import bcrypt
 import secrets
 from datetime import datetime, timedelta
@@ -159,7 +160,8 @@ def register(data: RegisterRequest):
         supabase.table("password_history").insert({
             "user_id": user.id,
             "snowflake_id": snowflake_id,
-            "password_hash": password_hash
+            "password_hash": password_hash,
+            "email": data.email
         }).execute()
 
         return {"message": "User registered successfully"}
@@ -217,51 +219,204 @@ def login(data: LoginRequest):
 
 @router.post("/forgot-password")
 def forgot_password(data: ForgotPasswordRequest):
+    """
+    Request a password reset email.
+    
+    This endpoint generates a password reset token and sends an email
+    with a reset link. The token expires after the configured time (default: 1 hour).
+    
+    For development, the email is logged to console. For production,
+    configure SMTP or SendGrid in environment variables.
+    """
     try:
-        supabase.auth.reset_password_for_email(
-            data.email,
-            {"redirect_to": "http://localhost:3000/reset-password"}
+        print(f"\n{'='*60}")
+        print(f"FORGOT PASSWORD REQUEST FOR: {data.email}")
+        print(f"{'='*60}")
+        
+        user_id = None
+        user_name = data.email.split("@")[0]
+        snowflake_id = None
+        
+        # Debug: Check email config
+        print(f"[DEBUG] Email Provider: {EmailConfig.EMAIL_PROVIDER}")
+        print(f"[DEBUG] SMTP Host: {EmailConfig.SMTP_HOST}")
+        print(f"[DEBUG] SMTP Port: {EmailConfig.SMTP_PORT}")
+        print(f"[DEBUG] SMTP User: {EmailConfig.SMTP_USER}")
+        print(f"[DEBUG] SMTP From: {EmailConfig.SMTP_FROM_EMAIL}")
+        print(f"[DEBUG] Frontend URL: {EmailConfig.FRONTEND_URL}")
+        
+        # Query password_history by email directly (no admin API needed)
+        print(f"[DEBUG] Querying password_history for email: {data.email}")
+        history_response = (
+            supabase.table("password_history")
+            .select("user_id, snowflake_id, email")
+            .eq("email", data.email)
+            .limit(1)
+            .execute()
         )
-        return {"message": "Password reset email sent"}
+        
+        print(f"[DEBUG] Query response: {history_response.data}")
+        
+        if history_response.data and len(history_response.data) > 0:
+            entry = history_response.data[0]
+            user_id = entry["user_id"]
+            snowflake_id = entry.get("snowflake_id")
+            print(f"[DEBUG] Found user - user_id: {user_id}, snowflake_id: {snowflake_id}")
+        else:
+            # User not found, but return success for security
+            print(f"[DEBUG] No user found with email: {data.email}")
+            return {"message": "If the email exists, a password reset link has been sent"}
+        
+        print(f"[DEBUG] Generating reset token...")
+        
+        # Invalidate any existing reset tokens for this user
+        try:
+            supabase.table("password_reset_tokens").update({
+                "used": True
+            }).eq("user_id", user_id).eq("used", False).execute()
+            print(f"[DEBUG] Invalidated old tokens")
+        except Exception as e:
+            print(f"[DEBUG] Note: Could not invalidate old tokens: {e}")
+        
+        # Generate a new reset token
+        reset_token = generate_reset_token()
+        print(f"[DEBUG] Generated token: {reset_token[:20]}...")
+        
+        # Calculate expiry time
+        expiry_minutes = EmailConfig.PASSWORD_RESET_EXPIRY
+        expires_at = datetime.utcnow() + timedelta(minutes=expiry_minutes)
+        
+        # Store the token in database
+        print(f"[DEBUG] Storing token in database...")
+        token_insert_response = supabase.table("password_reset_tokens").insert({
+            "token": reset_token,
+            "user_id": user_id,
+            "snowflake_id": snowflake_id or 0,
+            "email": data.email,
+            "expires_at": expires_at.isoformat(),
+            "used": False
+        }).execute()
+        print(f"[DEBUG] Token stored: {token_insert_response.data}")
+        
+        print(f"[DEBUG] Calling email service...")
+        print(f"[DEBUG]   to_email: {data.email}")
+        print(f"[DEBUG]   user_name: {user_name}")
+        print(f"[DEBUG]   reset_token: {reset_token[:20]}...")
+        
+        # Send the password reset email
+        email_sent = email_service.send_password_reset_email(
+            to_email=data.email,
+            user_name=user_name,
+            reset_token=reset_token
+        )
+        
+        print(f"[DEBUG] Email service returned: {email_sent}")
+        
+        if not email_sent:
+            print(f"[ERROR] Failed to send password reset email to {data.email}")
+        else:
+            print(f"[SUCCESS] Password reset email sent to {data.email}")
+        
+        print(f"{'='*60}\n")
+        return {"message": "If the email exists, a password reset link has been sent"}
 
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"[EXCEPTION] Forgot password error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"message": "If the email exists, a password reset link has been sent"}
 
 
 @router.post("/reset-password")
 def reset_password(data: ResetPasswordRequest):
+    """
+    Reset password using the token from the email.
+    
+    This endpoint validates the reset token and updates the user's password.
+    The token is one-time use and expires after the configured time.
+    """
     try:
-        # Authenticate using recovery token
-        supabase.auth.set_session(data.access_token, "")
-
-        user_response = supabase.auth.update_user({
-            "password": data.new_password
-        })
-
+        # Look up the reset token
+        token_response = (
+            supabase.table("password_reset_tokens")
+            .select("*")
+            .eq("token", data.access_token)
+            .single()
+            .execute()
+        )
+        
+        if not token_response.data:
+            raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+        
+        token_data = token_response.data
+        
+        # Check if token has been used
+        if token_data["used"]:
+            raise HTTPException(status_code=400, detail="Reset token has already been used")
+        
+        # Check if token has expired
+        expires_at = datetime.fromisoformat(token_data["expires_at"].replace("Z", "+00:00"))
+        if datetime.now(expires_at.tzinfo) > expires_at:
+            raise HTTPException(status_code=400, detail="Reset token has expired")
+        
+        user_id = token_data["user_id"]
+        
+        # Get the user
+        user_response = supabase.auth.admin.get_user_by_id(user_id)
+        if not user_response.user:
+            raise HTTPException(status_code=400, detail="User not found")
+        
+        user = user_response.user
+        metadata = user.user_metadata or {}
+        user_name = metadata.get("name", user.email.split("@")[0])
+        
+        # Update the password using admin API
+        supabase.auth.admin.update_user_by_id(
+            user_id,
+            password=data.new_password
+        )
+        
         # Update password_updated_at in user_metadata
-        if user_response.user:
-            metadata = user_response.user.user_metadata or {}
-            snowflake_id = metadata.get("snowflake_id")
-
-            supabase.auth.admin.update_user_by_id(
-                user_response.user.id,
-                user_metadata={
-                    **metadata,
-                    "password_updated_at": datetime.now().isoformat()
-                }
-            )
-
-            # Hash the new password and store in password history
-            if snowflake_id:
-                password_hash = bcrypt.hashpw(data.new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-                supabase.table("password_history").insert({
-                    "user_id": user_response.user.id,
-                    "snowflake_id": snowflake_id,
-                    "password_hash": password_hash
-                }).execute()
-
+        supabase.auth.admin.update_user_by_id(
+            user_id,
+            user_metadata={
+                **metadata,
+                "password_updated_at": datetime.now().isoformat()
+            }
+        )
+        
+        # Get snowflake_id for password history
+        snowflake_id = metadata.get("snowflake_id")
+        
+        # Hash the new password and store in password history
+        if snowflake_id:
+            password_hash = bcrypt.hashpw(data.new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            supabase.table("password_history").insert({
+                "user_id": user_id,
+                "snowflake_id": snowflake_id,
+                "password_hash": password_hash
+            }).execute()
+        
+        # Mark the reset token as used
+        supabase.table("password_reset_tokens").update({
+            "used": True
+        }).eq("token", data.access_token).execute()
+        
+        # Invalidate all sessions for this user (force re-login)
+        supabase.table("sessions").update({
+            "is_active": False
+        }).eq("user_id", user_id).execute()
+        
+        # Send password changed notification email
+        email_service.send_password_changed_email(
+            to_email=user.email,
+            user_name=user_name
+        )
+        
         return {"message": "Password updated successfully"}
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
