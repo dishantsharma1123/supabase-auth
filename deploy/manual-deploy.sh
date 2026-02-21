@@ -5,7 +5,7 @@
 
 set -e
 
-SERVER="ds95097v@ramganga.merai.cloud"
+SERVER="ds95097v@padma.merai.cloud"
 PORT="7722"
 REMOTE_DIR="auth-poc-docker"
 
