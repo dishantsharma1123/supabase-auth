@@ -8,7 +8,7 @@ set -e
 
 # Configuration
 SERVER_USER="ds95097v"
-SERVER_HOST="ramganga.merai.cloud"
+SERVER_HOST="padma.merai.cloud"
 SERVER_PORT="7722"
 REMOTE_DIR="~/auth-poc-docker"
 LOCAL_DIR="$(dirname "$0")/.."
@@ -55,6 +55,7 @@ scp -P ${SERVER_PORT} ${LOCAL_DIR}/backend/schemas.py ${SERVER_USER}@${SERVER_HO
 scp -P ${SERVER_PORT} ${LOCAL_DIR}/backend/snowflake.py ${SERVER_USER}@${SERVER_HOST}:${REMOTE_DIR}/backend/
 scp -P ${SERVER_PORT} ${LOCAL_DIR}/backend/supabase_client.py ${SERVER_USER}@${SERVER_HOST}:${REMOTE_DIR}/backend/
 scp -P ${SERVER_PORT} ${LOCAL_DIR}/backend/routes/auth.py ${SERVER_USER}@${SERVER_HOST}:${REMOTE_DIR}/backend/routes/
+scp -P ${SERVER_PORT} ${LOCAL_DIR}/backend/email_service.py ${SERVER_USER}@${SERVER_HOST}:${REMOTE_DIR}/backend/
 
 echo ""
 echo -e "${GREEN}Step 4: Setting up environment and starting container...${NC}"

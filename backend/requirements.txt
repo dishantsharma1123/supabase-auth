@@ -6,3 +6,4 @@ pydantic
 bcrypt
 gunicorn
 email-validator
+requests
