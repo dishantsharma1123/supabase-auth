@@ -132,6 +132,81 @@ This is an automated email. Please do not reply to this message.
         return html_content, text_content
 
     @staticmethod
+    def welcome_email(
+        user_name: str,
+        email: str,
+        login_url: str
+    ) -> tuple[str, str]:
+        """
+        Generate welcome email content for new registrations.
+        
+        Returns:
+            tuple: (html_content, text_content)
+        """
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Welcome!</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                <h1 style="color: white; margin: 0;">🎉 Welcome!</h1>
+            </div>
+            
+            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #ddd; border-top: none;">
+                <p>Hello <strong>{user_name}</strong>,</p>
+                
+                <p>Thank you for creating an account! Your registration was successful.</p>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{login_url}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                        Login to Your Account
+                    </a>
+                </div>
+                
+                <p style="background: #e8f5e9; padding: 15px; border-radius: 5px; border-left: 4px solid #4caf50;">
+                    <strong>Account Details:</strong><br>
+                    Email: {email}<br>
+                    Registered on: {datetime.now().strftime("%B %d, %Y at %I:%M %p")}
+                </p>
+                
+                <p style="color: #666; font-size: 14px;">
+                    If you did not create this account, please contact our support team immediately.
+                </p>
+                
+                <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                
+                <p style="color: #888; font-size: 12px; text-align: center;">
+                    This is an automated email. Please do not reply to this message.
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        text_content = f"""
+Hello {user_name},
+
+Thank you for creating an account! Your registration was successful.
+
+Account Details:
+Email: {email}
+Registered on: {datetime.now().strftime("%B %d, %Y at %I:%M %p")}
+
+To login to your account, visit: {login_url}
+
+If you did not create this account, please contact our support team immediately.
+
+---
+This is an automated email. Please do not reply to this message.
+        """
+        
+        return html_content, text_content
+
+    @staticmethod
     def password_changed_notification(user_name: str) -> tuple[str, str]:
         """
         Generate password changed notification email.
@@ -213,6 +288,17 @@ class EmailService:
         """
         provider = self.config.EMAIL_PROVIDER.lower()
         
+        # --- NEW STRICT DEBUGGING ASSERTS ---
+        print("\n" + "="*60)
+        print("[CRITICAL CONFIGURATION CHECK]")
+        print(f"-> EMAIL_PROVIDER    : '{provider}'")
+        print(f"-> SMTP_HOST         : '{self.config.SMTP_HOST}'")
+        print(f"-> SMTP_PORT         : '{self.config.SMTP_PORT}'")
+        print(f"-> SMTP_USER length  : {len(self.config.SMTP_USER) if self.config.SMTP_USER else 0} characters")
+        print(f"-> SMTP_PASS exists  : {bool(self.config.SMTP_PASSWORD)}")
+        print("="*60 + "\n")
+        # ------------------------------------
+
         if provider == "smtp":
             return self._send_via_smtp(to_email, subject, html_content, text_content)
         elif provider == "sendgrid":
@@ -400,6 +486,36 @@ class EmailService:
         return self.send_email(
             to_email=to_email,
             subject="Your Password Has Been Changed",
+            html_content=html_content,
+            text_content=text_content
+        )
+    
+    def send_welcome_email(
+        self,
+        to_email: str,
+        user_name: str
+    ) -> bool:
+        """
+        Send a welcome email for new registrations.
+        
+        Args:
+            to_email: User's email address
+            user_name: User's name
+            
+        Returns:
+            bool: True if email was sent successfully
+        """
+        login_url = f"{self.config.FRONTEND_URL}/login"
+        
+        html_content, text_content = self.template.welcome_email(
+            user_name=user_name,
+            email=to_email,
+            login_url=login_url
+        )
+        
+        return self.send_email(
+            to_email=to_email,
+            subject="Welcome! Your Account Has Been Created",
             html_content=html_content,
             text_content=text_content
         )

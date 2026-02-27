@@ -133,7 +133,17 @@ def get_user_from_metadata(user) -> dict:
 
 @router.post("/register")
 def register(data: RegisterRequest):
+    """
+    Register a new user.
+    
+    Creates a new user account with the provided details and sends
+    a welcome email to the user.
+    """
     try:
+        print(f"\n{'='*60}")
+        print(f"REGISTRATION REQUEST FOR: {data.email}")
+        print(f"{'='*60}")
+        
         # Generate Snowflake ID
         snowflake_id = generate_snowflake_id()
 
@@ -164,9 +174,27 @@ def register(data: RegisterRequest):
             "email": data.email
         }).execute()
 
+        print(f"[DEBUG] User registered successfully: {user.id}")
+        
+        # Send welcome email
+        user_name = data.name or data.email.split("@")[0]
+        print(f"[DEBUG] Sending welcome email to: {data.email}")
+        
+        email_sent = email_service.send_welcome_email(
+            to_email=data.email,
+            user_name=user_name
+        )
+        
+        if email_sent:
+            print(f"[SUCCESS] Welcome email sent to {data.email}")
+        else:
+            print(f"[WARNING] Failed to send welcome email to {data.email}")
+        
+        print(f"{'='*60}\n")
         return {"message": "User registered successfully"}
 
     except Exception as e:
+        print(f"[ERROR] Registration failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
