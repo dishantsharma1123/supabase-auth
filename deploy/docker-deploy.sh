@@ -7,8 +7,8 @@
 set -e
 
 # Configuration
-SERVER_USER="ds95097v"
-SERVER_HOST="padma.merai.cloud"
+SERVER_USER="test1"
+SERVER_HOST="10.10.110.26"
 SERVER_PORT="7722"
 REMOTE_DIR="~/auth-poc-docker"
 LOCAL_DIR="$(dirname "$0")/.."

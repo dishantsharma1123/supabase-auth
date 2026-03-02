@@ -176,19 +176,28 @@ def register(data: RegisterRequest):
 
         print(f"[DEBUG] User registered successfully: {user.id}")
         
-        # Send welcome email
+        # Send welcome email in background (non-blocking)
         user_name = data.name or data.email.split("@")[0]
-        print(f"[DEBUG] Sending welcome email to: {data.email}")
+        print(f"[DEBUG] Queuing welcome email to: {data.email}")
         
-        email_sent = email_service.send_welcome_email(
-            to_email=data.email,
-            user_name=user_name
-        )
+        # Try to send email, but don't block the response
+        import threading
+        def send_email_async():
+            try:
+                email_sent = email_service.send_welcome_email(
+                    to_email=data.email,
+                    user_name=user_name
+                )
+                if email_sent:
+                    print(f"[SUCCESS] Welcome email sent to {data.email}")
+                else:
+                    print(f"[WARNING] Failed to send welcome email to {data.email}")
+            except Exception as e:
+                print(f"[ERROR] Email sending failed: {e}")
         
-        if email_sent:
-            print(f"[SUCCESS] Welcome email sent to {data.email}")
-        else:
-            print(f"[WARNING] Failed to send welcome email to {data.email}")
+        email_thread = threading.Thread(target=send_email_async)
+        email_thread.daemon = True
+        email_thread.start()
         
         print(f"{'='*60}\n")
         return {"message": "User registered successfully"}
@@ -326,24 +335,27 @@ def forgot_password(data: ForgotPasswordRequest):
         }).execute()
         print(f"[DEBUG] Token stored: {token_insert_response.data}")
         
-        print(f"[DEBUG] Calling email service...")
-        print(f"[DEBUG]   to_email: {data.email}")
-        print(f"[DEBUG]   user_name: {user_name}")
-        print(f"[DEBUG]   reset_token: {reset_token[:20]}...")
+        print(f"[DEBUG] Queuing password reset email to: {data.email}")
         
-        # Send the password reset email
-        email_sent = email_service.send_password_reset_email(
-            to_email=data.email,
-            user_name=user_name,
-            reset_token=reset_token
-        )
+        # Send password reset email in background (non-blocking)
+        import threading
+        def send_reset_email_async():
+            try:
+                email_sent = email_service.send_password_reset_email(
+                    to_email=data.email,
+                    user_name=user_name,
+                    reset_token=reset_token
+                )
+                if email_sent:
+                    print(f"[SUCCESS] Password reset email sent to {data.email}")
+                else:
+                    print(f"[WARNING] Failed to send password reset email to {data.email}")
+            except Exception as e:
+                print(f"[ERROR] Password reset email sending failed: {e}")
         
-        print(f"[DEBUG] Email service returned: {email_sent}")
-        
-        if not email_sent:
-            print(f"[ERROR] Failed to send password reset email to {data.email}")
-        else:
-            print(f"[SUCCESS] Password reset email sent to {data.email}")
+        email_thread = threading.Thread(target=send_reset_email_async)
+        email_thread.daemon = True
+        email_thread.start()
         
         print(f"{'='*60}\n")
         return {"message": "If the email exists, a password reset link has been sent"}

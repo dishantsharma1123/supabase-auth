@@ -336,7 +336,11 @@ class EmailService:
             
             print(f"[SMTP DEBUG] Connecting to SMTP server...")
             
-            with smtplib.SMTP(self.config.SMTP_HOST, self.config.SMTP_PORT) as server:
+            # Set timeout to prevent indefinite hanging
+            import socket
+            socket.setdefaulttimeout(30)
+            
+            with smtplib.SMTP(self.config.SMTP_HOST, self.config.SMTP_PORT, timeout=30) as server:
                 print(f"[SMTP DEBUG] Connected, setting debug level...")
                 server.set_debuglevel(1)  # Enable SMTP debug output
                 

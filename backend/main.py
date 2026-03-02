@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes.auth import router as auth_router
-from config import ALLOWED_ORIGINS
+from config import ALLOWED_ORIGINS, BACKEND_PORT
+import uvicorn
 
 app = FastAPI(title="Supabase Auth POC")
 
@@ -17,4 +18,9 @@ app.include_router(auth_router)
 
 @app.get("/")
 def health_check():
-    return {"status": "ok"}
+    return {"status": "ok", "message": "Auth API is running"}
+
+
+if __name__ == "__main__":
+    print(f"Starting server on port {BACKEND_PORT}...")
+    uvicorn.run(app, host="0.0.0.0", port=BACKEND_PORT)

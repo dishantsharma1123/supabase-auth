@@ -10,10 +10,21 @@ services:
     env_file:
       - .env
     environment:
-      PYTHONUNBUFFERED=1
+      - PYTHONUNBUFFERED=1
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-http://localhost:3000}
+      - EMAIL_PROVIDER=${EMAIL_PROVIDER:-smtp}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Auth System}
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - PASSWORD_RESET_EXPIRY=${PASSWORD_RESET_EXPIRY:-60}
+    command: gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --access-logfile - --error-logfile -
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

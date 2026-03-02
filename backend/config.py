@@ -1,11 +1,15 @@
 import os
 from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()
+# Load .env from parent directory
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(env_path)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
+BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8756"))
 
 # SSO Configuration
 # Comma-separated list of allowed origins for CORS (for cross-domain SSO)
