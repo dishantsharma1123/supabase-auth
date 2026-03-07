@@ -170,8 +170,7 @@ def register(data: RegisterRequest):
         supabase.table("password_history").insert({
             "user_id": user.id,
             "snowflake_id": snowflake_id,
-            "password_hash": password_hash,
-            "email": data.email
+            "password_hash": password_hash
         }).execute()
 
         print(f"[DEBUG] User registered successfully: {user.id}")
