@@ -491,6 +491,10 @@ def me(authorization: str = Header(...), x_csrf_token: str = Header(...)):
         session_id = session.data["session_id"] if session.data else None
         is_session_active = session.data["is_active"] if session.data else False
 
+        # Security: Reject inactive sessions
+        if not is_session_active:
+            raise HTTPException(status_code=401, detail="Session expired or logged out")
+
         # Determine invitation state based on email_confirmed_at and invited_at
         invitation_state = None
         if hasattr(user, 'email_confirmed_at') and user.email_confirmed_at:
@@ -554,6 +558,19 @@ def get_password_history(authorization: str = Header(...), x_csrf_token: str = H
         if not validate_csrf_token(x_csrf_token, user.id):
             raise HTTPException(status_code=403, detail="Invalid CSRF token")
 
+        # Check if session is active
+        session = (
+            supabase.table("sessions")
+            .select("is_active")
+            .eq("user_id", user.id)
+            .eq("is_active", True)
+            .single()
+            .execute()
+        )
+
+        if not session.data:
+            raise HTTPException(status_code=401, detail="Session expired or logged out")
+
         # Get user's snowflake_id from metadata
         metadata = user.user_metadata or {}
         snowflake_id = metadata.get("snowflake_id")
@@ -601,6 +618,19 @@ def logout(data: LogoutRequest, authorization: str = Header(...), x_csrf_token: 
         # Validate CSRF token
         if not validate_csrf_token(x_csrf_token, user.id):
             raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+        # Check if session is active
+        session = (
+            supabase.table("sessions")
+            .select("is_active")
+            .eq("user_id", user.id)
+            .eq("is_active", True)
+            .single()
+            .execute()
+        )
+
+        if not session.data:
+            raise HTTPException(status_code=401, detail="Session expired or logged out")
 
         # Invalidate the session
         supabase.table("sessions").update({
